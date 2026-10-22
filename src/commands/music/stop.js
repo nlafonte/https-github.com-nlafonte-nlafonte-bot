@@ -11,6 +11,7 @@ module.exports = {
     }
 
     session.player.stop();
+    session.ffmpegProcess?.kill('SIGKILL');
     session.connection.destroy();
     clearSession(interaction.guild.id);
 
