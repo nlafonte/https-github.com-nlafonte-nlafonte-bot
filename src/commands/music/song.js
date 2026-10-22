@@ -38,10 +38,14 @@ function createFfmpegResource(sourceUrl) {
   ffmpeg.stderr.on('data', (d) => {
     stderr += d.toString();
   });
-  ffmpeg.on('close', (code) => {
-    if (code !== 0 && code !== null) {
-      console.error(`ffmpeg a quitté avec le code ${code} :\n${stderr.slice(-1500)}`);
+  ffmpeg.on('close', (code, signal) => {
+    console.log(`[song] ffmpeg fermé : code=${code} signal=${signal}`);
+    if (stderr.trim()) {
+      console.log(`[song] stderr ffmpeg :\n${stderr.slice(-1500)}`);
     }
+  });
+  ffmpeg.on('error', (err) => {
+    console.error('[song] ffmpeg n\'a pas pu démarrer :', err);
   });
 
   let bytesReceived = 0;
