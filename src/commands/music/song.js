@@ -39,7 +39,8 @@ function createFfmpegResource(sourceUrl) {
     stderr += d.toString();
   });
   ffmpeg.on('close', (code, signal) => {
-    console.log(`[song] ffmpeg fermé : code=${code} signal=${signal}`);
+    exitInfo = { code, signal };
+    console.log(`[song] ffmpeg fermé : code=${code} signal=${signal} bytes=${bytesReceived}`);
     if (stderr.trim()) {
       console.log(`[song] stderr ffmpeg :\n${stderr.slice(-1500)}`);
     }
@@ -49,6 +50,7 @@ function createFfmpegResource(sourceUrl) {
   });
 
   let bytesReceived = 0;
+  let exitInfo = null;
   ffmpeg.stdout.on('data', (chunk) => {
     bytesReceived += chunk.length;
   });
@@ -56,7 +58,7 @@ function createFfmpegResource(sourceUrl) {
     console.log(`[song] ${bytesReceived} octets PCM reçus de ffmpeg après 5s`);
   }, 5000);
 
-  return { stream: ffmpeg.stdout, process: ffmpeg };
+  return { stream: ffmpeg.stdout, process: ffmpeg, getDiagnostics: () => ({ bytesReceived, exitInfo, stderr: stderr.slice(-1200) }) };
 }
 
 module.exports = {
@@ -113,7 +115,7 @@ module.exports = {
         throw error;
       }
 
-      const { stream, process } = createFfmpegResource(streamSource);
+      const { stream, process, getDiagnostics } = createFfmpegResource(streamSource);
       ffmpegProcess = process;
       const resource = createAudioResource(stream, { inputType: StreamType.Raw });
 
@@ -136,7 +138,19 @@ module.exports = {
 
       await interaction.editReply({ embeds: [embed] });
 
-      const cleanup = () => stopSession(interaction.guild.id, session);
+      const cleanup = async () => {
+        const details = getDiagnostics();
+        console.log('[song] fin lecture :', JSON.stringify(details));
+        if (!details.bytesReceived) {
+          try {
+            await interaction.followUp({
+              content: '⚠️ Le flux audio s’est arrêté sans envoyer de son. Vérifie les logs Render (`[song] ffmpeg fermé` et `[song] stderr ffmpeg`) pour identifier la cause.',
+              ephemeral: true,
+            });
+          } catch (err) { console.warn('[song] message erreur:', err.message); }
+        }
+        stopSession(interaction.guild.id, session);
+      };
 
       player.removeAllListeners(AudioPlayerStatus.Idle);
       player.once(AudioPlayerStatus.Idle, cleanup);
