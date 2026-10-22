@@ -12,7 +12,7 @@ const {
   StreamType,
 } = require('@discordjs/voice');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
-const { setSession, getSession, clearSession } = require('../../utils/musicPlayers');
+const { setSession, stopSession } = require('../../utils/musicPlayers');
 
 const soundcloud = new SoundCloudPlugin();
 
@@ -98,17 +98,23 @@ module.exports = {
         }
       }
 
-      let connection = getSession(interaction.guild.id)?.connection;
-      if (!connection) {
+      stopSession(interaction.guild.id);
+      let connection;
+      let ffmpegProcess;
+      try {
         connection = joinVoiceChannel({
           channelId: voiceChannel.id,
           guildId: interaction.guild.id,
           adapterCreator: interaction.guild.voiceAdapterCreator,
         });
         await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+      } catch (error) {
+        if (connection?.state.status !== VoiceConnectionStatus.Destroyed) connection?.destroy();
+        throw error;
       }
 
-      const { stream, process: ffmpegProcess } = createFfmpegResource(streamSource);
+      const { stream, process } = createFfmpegResource(streamSource);
+      ffmpegProcess = process;
       const resource = createAudioResource(stream, { inputType: StreamType.Raw });
 
       const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
@@ -120,7 +126,8 @@ module.exports = {
       console.log('[song] subscription réussie :', Boolean(subscription));
       console.log('[song] connection state :', connection.state.status);
 
-      setSession(interaction.guild.id, { connection, player, ffmpegProcess });
+      const session = { connection, player, ffmpegProcess };
+      setSession(interaction.guild.id, session);
 
       const embed = new EmbedBuilder()
         .setTitle('🎵 Lecture en cours')
@@ -129,11 +136,7 @@ module.exports = {
 
       await interaction.editReply({ embeds: [embed] });
 
-      const cleanup = () => {
-        ffmpegProcess.kill('SIGKILL');
-        connection.destroy();
-        clearSession(interaction.guild.id);
-      };
+      const cleanup = () => stopSession(interaction.guild.id, session);
 
       player.removeAllListeners(AudioPlayerStatus.Idle);
       player.once(AudioPlayerStatus.Idle, cleanup);
