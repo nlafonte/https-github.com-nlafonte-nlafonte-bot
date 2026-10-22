@@ -9,7 +9,7 @@ const {
   NoSubscriberBehavior,
   StreamType,
 } = require('@discordjs/voice');
-const { Ytdl } = require('@distube/ytdl-core');
+const { Ytdl, parseVideoId } = require('@distube/ytdl-core');
 const { setSession, getSession, clearSession } = require('../../utils/musicPlayers');
 
 const ytdl = new Ytdl();
@@ -28,7 +28,7 @@ module.exports = {
       return interaction.reply({ content: '🔇 Rejoins un salon vocal avant d\'utiliser cette commande.', ephemeral: true });
     }
 
-    if (!Ytdl.validateURL(url)) {
+    if (!parseVideoId(url)) {
       return interaction.reply({ content: '❌ Lien invalide. Donne un lien YouTube valide.', ephemeral: true });
     }
 
