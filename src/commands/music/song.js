@@ -7,15 +7,18 @@ const {
   VoiceConnectionStatus,
   entersState,
   NoSubscriberBehavior,
+  StreamType,
 } = require('@discordjs/voice');
-const play = require('play-dl');
+const { Ytdl } = require('@distube/ytdl-core');
 const { setSession, getSession, clearSession } = require('../../utils/musicPlayers');
+
+const ytdl = new Ytdl();
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('song')
-    .setDescription('Joue une musique depuis un lien (YouTube, SoundCloud, lien audio direct)')
-    .addStringOption((opt) => opt.setName('lien').setDescription('Lien de la musique').setRequired(true)),
+    .setDescription('Joue une musique depuis un lien YouTube')
+    .addStringOption((opt) => opt.setName('lien').setDescription('Lien YouTube de la musique').setRequired(true)),
 
   async execute(interaction) {
     const url = interaction.options.getString('lien');
@@ -25,14 +28,16 @@ module.exports = {
       return interaction.reply({ content: '🔇 Rejoins un salon vocal avant d\'utiliser cette commande.', ephemeral: true });
     }
 
-    const type = await play.validate(url).catch(() => false);
-    if (!type || type === 'search') {
-      return interaction.reply({ content: '❌ Lien invalide. Donne un lien YouTube, SoundCloud ou un lien audio direct.', ephemeral: true });
+    if (!Ytdl.validateURL(url)) {
+      return interaction.reply({ content: '❌ Lien invalide. Donne un lien YouTube valide.', ephemeral: true });
     }
 
     await interaction.deferReply();
 
     try {
+      const info = await ytdl.getInfo(url);
+      const title = info.videoDetails.title;
+
       let connection = getSession(interaction.guild.id)?.connection;
       if (!connection) {
         connection = joinVoiceChannel({
@@ -43,20 +48,14 @@ module.exports = {
         await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
       }
 
-      const streamInfo = await play.stream(url);
-      const resource = createAudioResource(streamInfo.stream, { inputType: streamInfo.type });
+      const stream = ytdl.download(url, { filter: (f) => f.hasAudio && !f.hasVideo, quality: 'highestaudio' });
+      const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary });
 
       const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
       player.play(resource);
       connection.subscribe(player);
 
       setSession(interaction.guild.id, { connection, player });
-
-      let title = url;
-      if (type === 'yt_video') {
-        const info = await play.video_info(url).catch(() => null);
-        if (info?.video_details?.title) title = info.video_details.title;
-      }
 
       const embed = new EmbedBuilder()
         .setTitle('🎵 Lecture en cours')
