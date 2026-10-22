@@ -1,5 +1,10 @@
-const { Events, EmbedBuilder } = require('discord.js');
+const { Events, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const path = require('node:path');
 const config = require('../config');
+
+const BANNER_PATH = path.join(__dirname, '..', '..', 'assets', 'bienvenue.png');
+const EMOJI_BIENVENUE = '<:bienvenue:1562920145561587726>';
+const EMOJI_COEUR = '<:coeur:1562920220086108260>';
 
 module.exports = {
   name: Events.GuildMemberAdd,
@@ -15,17 +20,21 @@ module.exports = {
     const channel = member.guild.channels.cache.get(config.welcomeChannelId);
     if (!channel) return;
 
+    const attachment = new AttachmentBuilder(BANNER_PATH, { name: 'bienvenue.png' });
+
     const embed = new EmbedBuilder()
-      .setTitle(`👋 Bienvenue ${member.user.username} !`)
+      .setTitle(`${EMOJI_BIENVENUE}  Bienvenue ${member.user.username} !`)
       .setDescription(
-        `${member} vient de rejoindre **${member.guild.name}** !\n` +
+        `${member} vient de rejoindre **${member.guild.name}** ${EMOJI_COEUR}\n` +
           (config.rulesChannelId ? `N'oublie pas de lire <#${config.rulesChannelId}>.` : ''),
       )
-      .setColor(0x57f287)
-      .setThumbnail(member.user.displayAvatarURL())
-      .setFooter({ text: `Membre n°${member.guild.memberCount}` })
+      .setColor(0xe67e22)
+      .setImage('attachment://bienvenue.png')
+      .setFooter({ text: `⭐ Membre n°${member.guild.memberCount}` })
       .setTimestamp();
 
-    channel.send({ embeds: [embed] }).catch((err) => console.error('Impossible d\'envoyer le message de bienvenue :', err));
+    channel
+      .send({ embeds: [embed], files: [attachment] })
+      .catch((err) => console.error('Impossible d\'envoyer le message de bienvenue :', err));
   },
 };
