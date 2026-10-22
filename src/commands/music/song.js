@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { spawn } = require('node:child_process');
-const ffmpegPath = require('ffmpeg-static');
+// Render inclut FFmpeg système ; le binaire ffmpeg-static plante (SIGSEGV) sur les flux HTTPS.
+const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
 const {
   joinVoiceChannel,
   createAudioPlayer,
@@ -19,6 +20,7 @@ const soundcloud = new SoundCloudPlugin();
 // Lance ffmpeg pour transcoder n'importe quelle source lisible par ffmpeg
 // (lien audio direct, flux HLS SoundCloud, ...) en PCM brut pour @discordjs/voice.
 function createFfmpegResource(sourceUrl) {
+  console.log(`[song] lancement FFmpeg système : ${ffmpegPath}`);
   const ffmpeg = spawn(ffmpegPath, [
     '-reconnect', '1',
     '-reconnect_streamed', '1',
