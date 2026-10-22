@@ -25,7 +25,7 @@ function createFfmpegResource(sourceUrl) {
     '-reconnect_delay_max', '5',
     '-i', sourceUrl,
     '-analyzeduration', '0',
-    '-loglevel', '0',
+    '-loglevel', 'warning',
     '-f', 's16le',
     '-ar', '48000',
     '-ac', '2',
@@ -33,6 +33,25 @@ function createFfmpegResource(sourceUrl) {
   ]);
   ffmpeg.stdin.on('error', () => {});
   ffmpeg.stdout.on('error', () => {});
+
+  let stderr = '';
+  ffmpeg.stderr.on('data', (d) => {
+    stderr += d.toString();
+  });
+  ffmpeg.on('close', (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(`ffmpeg a quitté avec le code ${code} :\n${stderr.slice(-1500)}`);
+    }
+  });
+
+  let bytesReceived = 0;
+  ffmpeg.stdout.on('data', (chunk) => {
+    bytesReceived += chunk.length;
+  });
+  setTimeout(() => {
+    console.log(`[song] ${bytesReceived} octets PCM reçus de ffmpeg après 5s`);
+  }, 5000);
+
   return { stream: ffmpeg.stdout, process: ffmpeg };
 }
 
@@ -89,8 +108,13 @@ module.exports = {
       const resource = createAudioResource(stream, { inputType: StreamType.Raw });
 
       const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
+      player.on('stateChange', (oldState, newState) => {
+        console.log(`[song] player: ${oldState.status} -> ${newState.status}`);
+      });
       player.play(resource);
-      connection.subscribe(player);
+      const subscription = connection.subscribe(player);
+      console.log('[song] subscription réussie :', Boolean(subscription));
+      console.log('[song] connection state :', connection.state.status);
 
       setSession(interaction.guild.id, { connection, player, ffmpegProcess });
 
