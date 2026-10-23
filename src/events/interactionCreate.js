@@ -24,13 +24,28 @@ module.exports = {
 
     if (interaction.isButton()) {
       try {
-        if (interaction.customId === 'ticket_open') {
-          await tickets.openTicket(interaction);
+        if (interaction.customId === 'ticket_claim') {
+          await tickets.claimTicket(interaction);
         } else if (interaction.customId === 'ticket_close') {
-          await tickets.closeTicket(interaction);
+          await tickets.requestClose(interaction);
+        } else if (interaction.customId === 'ticket_close_confirm') {
+          await tickets.confirmClose(interaction);
+        } else if (interaction.customId === 'ticket_close_cancel') {
+          await tickets.cancelClose(interaction);
         }
       } catch (error) {
         console.error('Erreur bouton ticket :', error);
+      }
+      return;
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      try {
+        if (interaction.customId === 'ticket_category_select') {
+          await tickets.openTicket(interaction);
+        }
+      } catch (error) {
+        console.error('Erreur menu ticket :', error);
       }
     }
   },
