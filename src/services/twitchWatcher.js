@@ -27,8 +27,10 @@ async function checkOnce(client) {
   const state = load('twitch-status', { wasLive: false, lastStreamId: null });
   const stream = await getLiveStream(config.twitch.login);
   const isLive = Boolean(stream);
+  console.log(`[twitch] vérification : ${isLive ? `en direct (id ${stream.id})` : 'hors ligne'} (état précédent : ${state.wasLive ? `en direct (id ${state.lastStreamId})` : 'hors ligne'})`);
 
   if (isLive && (!state.wasLive || state.lastStreamId !== stream.id)) {
+    console.log('[twitch] nouveau live détecté, envoi de l\'annonce...');
     await announce(client, stream);
     save('twitch-status', { wasLive: true, lastStreamId: stream.id });
   } else if (!isLive && state.wasLive) {
@@ -39,7 +41,10 @@ async function checkOnce(client) {
 async function announce(client, stream) {
   const guild = client.guilds.cache.get(config.guildId);
   const channel = guild?.channels.cache.get(config.liveChannelId);
-  if (!channel) return;
+  if (!channel) {
+    console.error('[twitch] Salon d\'annonce introuvable (guild trouvée :', Boolean(guild), ', LIVE_CHANNEL_ID :', config.liveChannelId, ')');
+    return;
+  }
 
   const thumbnail = stream.thumbnail_url.replace('{width}', '640').replace('{height}', '360') + `?t=${Date.now()}`;
 
@@ -60,6 +65,7 @@ async function announce(client, stream) {
       embeds: [embed],
       allowedMentions: { parse: ['everyone'] },
     });
+    console.log('[twitch] annonce envoyée avec succès dans', channel.name);
   } catch (err) {
     console.error("Erreur lors de l'envoi de l'annonce Twitch :", err);
   }

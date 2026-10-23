@@ -4,22 +4,22 @@ const { getOrCreateWebhook } = require('../../utils/liveWebhook');
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('live')
-    .setDescription('Annonce que tu es en direct dans #twitch')
-    .addStringOption((opt) => opt.setName('titre').setDescription('Titre du stream').setRequired(true))
-    .addStringOption((opt) => opt.setName('lien').setDescription('Lien de la chaîne (Twitch, YouTube...)').setRequired(true))
-    .addStringOption((opt) => opt.setName('jeu').setDescription('Jeu ou catégorie du stream'))
+    .setName('annonce')
+    .setDescription('Publie une annonce dans #annonces')
+    .addStringOption((opt) => opt.setName('titre').setDescription("Titre de l'annonce").setRequired(true))
+    .addStringOption((opt) => opt.setName('message').setDescription("Contenu de l'annonce").setRequired(true))
+    .addStringOption((opt) => opt.setName('lien').setDescription('Lien à associer (optionnel)'))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(interaction) {
     const titre = interaction.options.getString('titre');
+    const message = interaction.options.getString('message');
     const lien = interaction.options.getString('lien');
-    const jeu = interaction.options.getString('jeu');
 
-    const channelId = config.liveChannelId || config.announceChannelId;
+    const channelId = config.announceChannelId;
     const channel = channelId ? interaction.guild.channels.cache.get(channelId) : null;
     if (!channel) {
-      return interaction.reply({ content: "❌ Salon d'annonce introuvable (LIVE_CHANNEL_ID non configuré).", ephemeral: true });
+      return interaction.reply({ content: "❌ Salon d'annonce introuvable (ANNOUNCE_CHANNEL_ID non configuré).", ephemeral: true });
     }
 
     await interaction.deferReply({ ephemeral: true });
@@ -28,15 +28,17 @@ module.exports = {
       const webhook = await getOrCreateWebhook(channel);
 
       const embed = new EmbedBuilder()
-        .setTitle(`🔴 ${titre}`)
-        .setURL(lien)
-        .setColor(0x9146ff)
+        .setTitle(`📢 ${titre}`)
+        .setDescription(message)
+        .setColor(0xe67e22)
         .setTimestamp();
-      if (jeu) embed.addFields({ name: 'Catégorie', value: jeu, inline: true });
-      embed.addFields({ name: 'Regarder', value: `[Clique ici pour rejoindre](${lien})` });
+      if (lien) {
+        embed.setURL(lien);
+        embed.addFields({ name: 'Lien', value: `[Clique ici](${lien})` });
+      }
 
       await webhook.send({
-        username: `${interaction.user.username} est en live !`,
+        username: `${interaction.user.username} annonce`,
         avatarURL: interaction.user.displayAvatarURL(),
         content: '@everyone',
         embeds: [embed],
@@ -45,7 +47,7 @@ module.exports = {
 
       await interaction.editReply(`✅ Annonce envoyée dans ${channel}.`);
     } catch (err) {
-      console.error('Erreur /live :', err);
+      console.error('Erreur /annonce :', err);
       await interaction.editReply("❌ Impossible d'envoyer l'annonce (permissions webhook manquantes ?).");
     }
   },
