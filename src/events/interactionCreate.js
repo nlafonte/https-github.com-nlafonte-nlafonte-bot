@@ -1,5 +1,6 @@
 const { Events } = require('discord.js');
 const tickets = require('../utils/tickets');
+const annonce = require('../commands/utility/annonce');
 
 module.exports = {
   name: Events.InteractionCreate,
@@ -46,6 +47,17 @@ module.exports = {
         }
       } catch (error) {
         console.error('Erreur menu ticket :', error);
+      }
+      return;
+    }
+
+    if (interaction.isModalSubmit()) {
+      try {
+        if (interaction.customId === annonce.MODAL_ID) {
+          await annonce.handleModalSubmit(interaction);
+        }
+      } catch (error) {
+        console.error('Erreur formulaire annonce :', error);
       }
     }
   },

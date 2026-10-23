@@ -53,15 +53,18 @@ async function announce(client, stream) {
     .setURL(`https://twitch.tv/${config.twitch.login}`)
     .setColor(0x9146ff)
     .setImage(thumbnail)
-    .addFields({ name: 'Catégorie', value: stream.game_name || 'Non précisée', inline: true })
+    .addFields({ name: '<:gaming:1562920226369179648> Catégorie', value: stream.game_name || 'Non précisée', inline: true })
     .setTimestamp();
+
+  const announceEmoji = '<:annonces:1562920124795846792>';
+  const flameEmoji = '<:flamme:1562920340986798160>';
 
   try {
     const webhook = await getOrCreateWebhook(channel);
     await webhook.send({
       username: `${stream.user_name} est en live sur Twitch !`,
       avatarURL: client.user.displayAvatarURL(),
-      content: '@everyone',
+      content: `${announceEmoji} @everyone ${flameEmoji} **${stream.user_name}** vient de passer en live sur Twitch !`,
       embeds: [embed],
       allowedMentions: { parse: ['everyone'] },
     });

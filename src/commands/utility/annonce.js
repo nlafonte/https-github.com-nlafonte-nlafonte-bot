@@ -1,20 +1,60 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  PermissionFlagsBits,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+} = require('discord.js');
 const config = require('../../config');
 const { getOrCreateWebhook } = require('../../utils/liveWebhook');
 
+const MODAL_ID = 'annonce_modal';
+
 module.exports = {
+  MODAL_ID,
   data: new SlashCommandBuilder()
     .setName('annonce')
-    .setDescription('Publie une annonce dans #annonces')
-    .addStringOption((opt) => opt.setName('titre').setDescription("Titre de l'annonce").setRequired(true))
-    .addStringOption((opt) => opt.setName('message').setDescription("Contenu de l'annonce").setRequired(true))
-    .addStringOption((opt) => opt.setName('lien').setDescription('Lien à associer (optionnel)'))
+    .setDescription('Ouvre un formulaire pour publier une annonce dans #annonces')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(interaction) {
-    const titre = interaction.options.getString('titre');
-    const message = interaction.options.getString('message');
-    const lien = interaction.options.getString('lien');
+    const modal = new ModalBuilder().setCustomId(MODAL_ID).setTitle('Nouvelle annonce');
+
+    const titreInput = new TextInputBuilder()
+      .setCustomId('titre')
+      .setLabel('Titre')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(100);
+
+    const messageInput = new TextInputBuilder()
+      .setCustomId('message')
+      .setLabel('Message')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setMaxLength(2000);
+
+    const lienInput = new TextInputBuilder()
+      .setCustomId('lien')
+      .setLabel('Lien (optionnel)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(titreInput),
+      new ActionRowBuilder().addComponents(messageInput),
+      new ActionRowBuilder().addComponents(lienInput),
+    );
+
+    await interaction.showModal(modal);
+  },
+
+  async handleModalSubmit(interaction) {
+    const titre = interaction.fields.getTextInputValue('titre');
+    const message = interaction.fields.getTextInputValue('message');
+    const lien = interaction.fields.getTextInputValue('lien');
 
     const channelId = config.announceChannelId;
     const channel = channelId ? interaction.guild.channels.cache.get(channelId) : null;
@@ -34,13 +74,13 @@ module.exports = {
         .setTimestamp();
       if (lien) {
         embed.setURL(lien);
-        embed.addFields({ name: 'Lien', value: `[Clique ici](${lien})` });
+        embed.addFields({ name: '<:lien:1562933815700226159> Lien', value: `[Clique ici](${lien})` });
       }
 
       await webhook.send({
         username: `${interaction.user.username} annonce`,
         avatarURL: interaction.user.displayAvatarURL(),
-        content: '@everyone',
+        content: '<:annonces:1562920124795846792> @everyone',
         embeds: [embed],
         allowedMentions: { parse: ['everyone'] },
       });
