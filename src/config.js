@@ -15,6 +15,15 @@ module.exports = {
   autoroleId: process.env.AUTOROLE_ID,
   staffRoleId: process.env.STAFF_ROLE_ID,
 
+  studioHubChannelId: process.env.STUDIO_HUB_CHANNEL_ID,
+  liveChannelId: process.env.LIVE_CHANNEL_ID,
+
+  twitch: {
+    clientId: process.env.TWITCH_CLIENT_ID,
+    clientSecret: process.env.TWITCH_CLIENT_SECRET,
+    login: process.env.TWITCH_LOGIN,
+  },
+
   xp: {
     minPerMessage: 15,
     maxPerMessage: 25,
