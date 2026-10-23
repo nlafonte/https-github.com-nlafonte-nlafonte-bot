@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { spawn } = require('node:child_process');
-const ffmpegPath = require('ffmpeg-static');
+// Render inclut FFmpeg système ; le binaire ffmpeg-static plante (SIGSEGV) sur les flux HTTPS.
+const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
 const {
   joinVoiceChannel,
   createAudioPlayer,
@@ -12,13 +13,14 @@ const {
   StreamType,
 } = require('@discordjs/voice');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
-const { setSession, getSession, clearSession } = require('../../utils/musicPlayers');
+const { setSession, stopSession } = require('../../utils/musicPlayers');
 
 const soundcloud = new SoundCloudPlugin();
 
 // Lance ffmpeg pour transcoder n'importe quelle source lisible par ffmpeg
 // (lien audio direct, flux HLS SoundCloud, ...) en PCM brut pour @discordjs/voice.
 function createFfmpegResource(sourceUrl) {
+  console.log(`[song] lancement FFmpeg système : ${ffmpegPath}`);
   const ffmpeg = spawn(ffmpegPath, [
     '-reconnect', '1',
     '-reconnect_streamed', '1',
@@ -39,7 +41,8 @@ function createFfmpegResource(sourceUrl) {
     stderr += d.toString();
   });
   ffmpeg.on('close', (code, signal) => {
-    console.log(`[song] ffmpeg fermé : code=${code} signal=${signal}`);
+    exitInfo = { code, signal };
+    console.log(`[song] ffmpeg fermé : code=${code} signal=${signal} bytes=${bytesReceived}`);
     if (stderr.trim()) {
       console.log(`[song] stderr ffmpeg :\n${stderr.slice(-1500)}`);
     }
@@ -49,6 +52,7 @@ function createFfmpegResource(sourceUrl) {
   });
 
   let bytesReceived = 0;
+  let exitInfo = null;
   ffmpeg.stdout.on('data', (chunk) => {
     bytesReceived += chunk.length;
   });
@@ -56,7 +60,7 @@ function createFfmpegResource(sourceUrl) {
     console.log(`[song] ${bytesReceived} octets PCM reçus de ffmpeg après 5s`);
   }, 5000);
 
-  return { stream: ffmpeg.stdout, process: ffmpeg };
+  return { stream: ffmpeg.stdout, process: ffmpeg, getDiagnostics: () => ({ bytesReceived, exitInfo, stderr: stderr.slice(-1200) }) };
 }
 
 module.exports = {
@@ -98,8 +102,10 @@ module.exports = {
         }
       }
 
-      let connection = getSession(interaction.guild.id)?.connection;
-      if (!connection) {
+      stopSession(interaction.guild.id);
+      let connection;
+      let ffmpegProcess;
+      try {
         connection = joinVoiceChannel({
           channelId: voiceChannel.id,
           guildId: interaction.guild.id,
@@ -111,9 +117,13 @@ module.exports = {
           console.error('[song] Erreur de connexion vocale :', err);
         });
         await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+      } catch (error) {
+        if (connection?.state.status !== VoiceConnectionStatus.Destroyed) connection?.destroy();
+        throw error;
       }
 
-      const { stream, process: ffmpegProcess } = createFfmpegResource(streamSource);
+      const { stream, process, getDiagnostics } = createFfmpegResource(streamSource);
+      ffmpegProcess = process;
       const resource = createAudioResource(stream, { inputType: StreamType.Raw });
 
       const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
@@ -125,7 +135,8 @@ module.exports = {
       console.log('[song] subscription réussie :', Boolean(subscription));
       console.log('[song] connection state :', connection.state.status);
 
-      setSession(interaction.guild.id, { connection, player, ffmpegProcess });
+      const session = { connection, player, ffmpegProcess };
+      setSession(interaction.guild.id, session);
 
       const embed = new EmbedBuilder()
         .setTitle('🎵 Lecture en cours')
@@ -134,10 +145,18 @@ module.exports = {
 
       await interaction.editReply({ embeds: [embed] });
 
-      const cleanup = () => {
-        ffmpegProcess.kill('SIGKILL');
-        connection.destroy();
-        clearSession(interaction.guild.id);
+      const cleanup = async () => {
+        const details = getDiagnostics();
+        console.log('[song] fin lecture :', JSON.stringify(details));
+        if (!details.bytesReceived) {
+          try {
+            await interaction.followUp({
+              content: '⚠️ Le flux audio s’est arrêté sans envoyer de son. Vérifie les logs Render (`[song] ffmpeg fermé` et `[song] stderr ffmpeg`) pour identifier la cause.',
+              ephemeral: true,
+            });
+          } catch (err) { console.warn('[song] message erreur:', err.message); }
+        }
+        stopSession(interaction.guild.id, session);
       };
 
       player.removeAllListeners(AudioPlayerStatus.Idle);
