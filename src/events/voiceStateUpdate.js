@@ -23,23 +23,29 @@ module.exports = {
 
     // Un membre rejoint le salon "Créer mon studio" : on lui crée son propre vocal.
     if (newState.channelId === config.studioHubChannelId && oldState.channelId !== config.studioHubChannelId) {
+      console.log(`[studio] ${newState.member?.user?.tag} a rejoint le hub, création du salon temporaire...`);
       const hub = newState.channel;
       const guild = newState.guild;
       const member = newState.member;
 
-      const studio = await guild.channels.create({
-        name: `🎙️ Studio de ${member.displayName}`,
-        type: ChannelType.GuildVoice,
-        parent: hub.parentId,
-        userLimit: hub.userLimit || 0,
-        permissionOverwrites: [
-          ...hub.permissionOverwrites.cache.map((o) => ({ id: o.id, allow: o.allow, deny: o.deny, type: o.type })),
-          {
-            id: member.id,
-            allow: [PermissionFlagsBits.ManageChannels, PermissionFlagsBits.MoveMembers],
-          },
-        ],
-      });
+      let studio;
+      try {
+        studio = await guild.channels.create({
+          name: `🎙️ Studio de ${member.displayName}`,
+          type: ChannelType.GuildVoice,
+          parent: hub.parentId,
+          userLimit: hub.userLimit || 0,
+          permissionOverwrites: [
+            {
+              id: member.id,
+              allow: [PermissionFlagsBits.ManageChannels, PermissionFlagsBits.MoveMembers],
+            },
+          ],
+        });
+      } catch (err) {
+        console.error('[studio] Impossible de créer le salon temporaire :', err);
+        return;
+      }
 
       const state = getTempChannels();
       state.channelIds.push(studio.id);
