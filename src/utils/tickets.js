@@ -30,15 +30,21 @@ function findOpenTicketByUser(state, userId) {
 }
 
 function buildPanel() {
+  const supportEmoji = CATEGORIES.support.emoji;
+  const warningEmoji = CATEGORIES.report.emoji;
+
   const embed = new EmbedBuilder()
-    .setTitle('🎫 Centre de support')
+    .setTitle('🎫 Ouvrir un ticket')
+    .setThumbnail(`https://cdn.discordapp.com/emojis/${supportEmoji.id}.png?size=128`)
     .setDescription(
-      "Besoin d'aide ? Choisis une catégorie ci-dessous pour ouvrir un ticket privé avec l'équipe.\n\n" +
+      `<:${supportEmoji.name}:${supportEmoji.id}> Besoin de contacter l'équipe de **nlafonte** ?\n\n` +
+        "Pour cela, choisis le type de ticket ci-dessous :\n\n" +
         Object.values(CATEGORIES)
           .map((c) => `<:${c.emoji.name}:${c.emoji.id}> **${c.label}** — ${c.description}`)
-          .join('\n'),
+          .join('\n') +
+        `\n\n<:${warningEmoji.name}:${warningEmoji.id}> **Tout abus du système de ticket entraînera une sanction.**`,
     )
-    .setColor(0x5865f2)
+    .setColor(0xe67e22)
     .setFooter({ text: 'Un seul ticket ouvert à la fois par membre.' });
 
   const select = new StringSelectMenuBuilder()
