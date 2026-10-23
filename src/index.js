@@ -9,6 +9,15 @@ if (!config.token) {
   process.exit(1);
 }
 
+// Filet de sécurité global : une erreur non gérée quelque part (ex. un flux
+// vocal) ne doit jamais faire planter tout le bot. On log et on continue.
+process.on('uncaughtException', (err) => {
+  console.error('❌ Exception non interceptée :', err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('❌ Promesse rejetée non interceptée :', err);
+});
+
 // Serveur HTTP minimal : Render exige un port ouvert, et un ping externe
 // (ex. cron-job.org) l'utilise pour empêcher le service gratuit de s'endormir.
 const PORT = process.env.PORT || 3000;

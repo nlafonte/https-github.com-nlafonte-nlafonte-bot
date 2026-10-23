@@ -105,6 +105,11 @@ module.exports = {
           guildId: interaction.guild.id,
           adapterCreator: interaction.guild.voiceAdapterCreator,
         });
+        // Un VoiceConnection sans listener "error" fait planter tout le process Node
+        // dès qu'il émet une erreur (comportement par défaut d'EventEmitter).
+        connection.on('error', (err) => {
+          console.error('[song] Erreur de connexion vocale :', err);
+        });
         await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
       }
 
@@ -145,7 +150,8 @@ module.exports = {
       });
     } catch (err) {
       console.error('Erreur /song :', err);
-      await interaction.editReply('❌ Impossible de lire ce lien (il est peut-être privé, invalide ou dans un format non supporté).');
+      const detail = String(err?.message || err).slice(0, 300);
+      await interaction.editReply(`❌ Impossible de lire ce lien.\n\`\`\`${detail}\`\`\``);
     }
   },
 };
