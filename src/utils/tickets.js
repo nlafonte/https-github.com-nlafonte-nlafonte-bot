@@ -6,7 +6,6 @@ const {
   StringSelectMenuBuilder,
   PermissionFlagsBits,
   ChannelType,
-  AttachmentBuilder,
 } = require('discord.js');
 const config = require('../config');
 const { load, save } = require('./store');
@@ -166,17 +165,6 @@ async function claimTicket(interaction) {
   await interaction.followUp({ content: `🙋 ${interaction.user} prend en charge ce ticket.` });
 }
 
-async function buildTranscript(channel) {
-  const messages = await channel.messages.fetch({ limit: 100 });
-  const sorted = [...messages.values()].reverse();
-  const lines = sorted.map((m) => {
-    const time = m.createdAt.toLocaleString('fr-FR');
-    const content = m.content || (m.embeds.length ? '[embed]' : '[message sans texte]');
-    return `[${time}] ${m.author.tag}: ${content}`;
-  });
-  return lines.join('\n') || 'Aucun message dans ce ticket.';
-}
-
 async function requestClose(interaction) {
   const state = getState();
   if (!state.open[interaction.channel.id]) {
@@ -199,15 +187,13 @@ async function confirmClose(interaction) {
   const state = getState();
   const ticket = state.open[interaction.channel.id];
 
-  await interaction.update({ content: '🔒 Fermeture en cours, génération du transcript...', components: [] });
+  await interaction.update({ content: '🔒 Fermeture du ticket...', components: [] });
 
-  const transcriptText = await buildTranscript(interaction.channel);
   const ticketLabel = ticket ? `#${ticket.number}` : interaction.channel.name;
 
   if (config.supportChannelId) {
     const logChannel = interaction.guild.channels.cache.get(config.supportChannelId);
     if (logChannel) {
-      const attachment = new AttachmentBuilder(Buffer.from(transcriptText, 'utf8'), { name: `ticket-${ticketLabel}.txt` });
       const logEmbed = new EmbedBuilder()
         .setTitle(`🔒 Ticket ${ticketLabel} fermé`)
         .addFields(
@@ -217,7 +203,7 @@ async function confirmClose(interaction) {
         )
         .setColor(0xed4245)
         .setTimestamp();
-      await logChannel.send({ embeds: [logEmbed], files: [attachment] }).catch(() => {});
+      await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
     }
   }
 
