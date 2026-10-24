@@ -47,8 +47,6 @@ module.exports = {
       try {
         if (interaction.customId === 'ticket_category_select') {
           await tickets.openTicket(interaction);
-        } else if (interaction.customId === annonce.EMOJI_SELECT_ID) {
-          await annonce.handleEmojiSelect(interaction);
         }
       } catch (error) {
         console.error('Erreur menu déroulant :', error);
@@ -58,7 +56,7 @@ module.exports = {
 
     if (interaction.isModalSubmit()) {
       try {
-        if (interaction.customId.startsWith(annonce.MODAL_ID)) {
+        if (interaction.customId === annonce.MODAL_ID) {
           await annonce.handleModalSubmit(interaction);
         }
       } catch (error) {

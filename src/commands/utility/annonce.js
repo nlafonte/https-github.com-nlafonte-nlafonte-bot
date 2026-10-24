@@ -6,17 +6,15 @@ const {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
-  StringSelectMenuBuilder,
 } = require('discord.js');
 const config = require('../../config');
 const { getOrCreateWebhook } = require('../../utils/liveWebhook');
 
 const MODAL_ID = 'annonce_modal';
-const EMOJI_SELECT_ID = 'annonce_emoji_select';
 
-// Discord ne permet pas de choisir un emoji directement dans un formulaire (modal) :
-// seuls des champs texte y sont autorisés. On fait donc le choix de l'emoji juste avant,
-// via un menu déroulant, puis on l'intègre au titre de l'annonce.
+// Discord ne permet ni sélecteur d'emoji ni upload de fichier dans un formulaire (modal) :
+// seuls des champs texte y sont autorisés. On demande donc le nom de l'emoji (ex: "flamme")
+// et un lien d'image en texte, directement dans le formulaire.
 const EMOJIS = [
   { name: 'annonces', id: '1562920124795846792' },
   { name: 'actualites', id: '1562933822369173595' },
@@ -45,37 +43,30 @@ const EMOJIS = [
 ];
 
 function findEmoji(name) {
-  return EMOJIS.find((e) => e.name === name);
+  if (!name) return null;
+  const clean = name.trim().toLowerCase().replace(/:/g, '');
+  return EMOJIS.find((e) => e.name === clean) || null;
+}
+
+function isValidUrl(value) {
+  try {
+    const u = new URL(value);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 module.exports = {
   MODAL_ID,
-  EMOJI_SELECT_ID,
+
   data: new SlashCommandBuilder()
     .setName('annonce')
     .setDescription('Ouvre un formulaire pour publier une annonce dans #annonces')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(interaction) {
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(EMOJI_SELECT_ID)
-      .setPlaceholder("Choisis un emoji pour l'annonce...")
-      .addOptions([
-        { label: 'Sans emoji', value: 'none', emoji: '🚫' },
-        ...EMOJIS.map((e) => ({ label: e.name, value: e.name, emoji: { id: e.id, name: e.name } })),
-      ]);
-
-    await interaction.reply({
-      content: "Choisis l'emoji qui précédera le titre de ton annonce :",
-      components: [new ActionRowBuilder().addComponents(select)],
-      ephemeral: true,
-    });
-  },
-
-  async handleEmojiSelect(interaction) {
-    const choice = interaction.values[0];
-
-    const modal = new ModalBuilder().setCustomId(`${MODAL_ID}:${choice}`).setTitle('Nouvelle annonce');
+    const modal = new ModalBuilder().setCustomId(MODAL_ID).setTitle('Nouvelle annonce');
 
     const titreInput = new TextInputBuilder()
       .setCustomId('titre')
@@ -91,30 +82,52 @@ module.exports = {
       .setRequired(true)
       .setMaxLength(2000);
 
+    const emojiInput = new TextInputBuilder()
+      .setCustomId('emoji')
+      .setLabel('Emoji (optionnel)')
+      .setPlaceholder('flamme, annonces, etoile, cadeau, video...')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setMaxLength(30);
+
     const lienInput = new TextInputBuilder()
       .setCustomId('lien')
       .setLabel('Lien (optionnel)')
+      .setPlaceholder('https://...')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false);
+
+    const imageInput = new TextInputBuilder()
+      .setCustomId('image')
+      .setLabel("Image - lien URL (optionnel)")
+      .setPlaceholder('https://... (termine par .png, .jpg, .gif...)')
       .setStyle(TextInputStyle.Short)
       .setRequired(false);
 
     modal.addComponents(
       new ActionRowBuilder().addComponents(titreInput),
       new ActionRowBuilder().addComponents(messageInput),
+      new ActionRowBuilder().addComponents(emojiInput),
       new ActionRowBuilder().addComponents(lienInput),
+      new ActionRowBuilder().addComponents(imageInput),
     );
 
     await interaction.showModal(modal);
-    await interaction.deleteReply().catch(() => {});
   },
 
   async handleModalSubmit(interaction) {
-    const [, emojiChoice] = interaction.customId.split(':');
-    const emoji = emojiChoice && emojiChoice !== 'none' ? findEmoji(emojiChoice) : null;
-    const titlePrefix = emoji ? `<:${emoji.name}:${emoji.id}>` : '📢';
-
     const titre = interaction.fields.getTextInputValue('titre');
     const message = interaction.fields.getTextInputValue('message');
+    const emojiName = interaction.fields.getTextInputValue('emoji');
     const lien = interaction.fields.getTextInputValue('lien');
+    const image = interaction.fields.getTextInputValue('image');
+
+    if (lien && !isValidUrl(lien)) {
+      return interaction.reply({ content: `❌ Le lien "${lien}" n'est pas une URL valide (doit commencer par https://).`, ephemeral: true });
+    }
+    if (image && !isValidUrl(image)) {
+      return interaction.reply({ content: `❌ Le lien d'image "${image}" n'est pas une URL valide (doit commencer par https://).`, ephemeral: true });
+    }
 
     const channelId = config.announceChannelId;
     const channel = channelId ? interaction.guild.channels.cache.get(channelId) : null;
@@ -122,28 +135,10 @@ module.exports = {
       return interaction.reply({ content: "❌ Salon d'annonce introuvable (ANNOUNCE_CHANNEL_ID non configuré).", ephemeral: true });
     }
 
-    // Discord ne permet pas non plus de joindre un fichier dans un formulaire.
-    // On demande donc à l'utilisateur d'envoyer une image juste après, ici même,
-    // et on la récupère automatiquement avant de publier l'annonce.
-    await interaction.reply({
-      content: "📎 Envoie une image **dans ce salon** dans les 60 secondes pour l'ajouter à l'annonce (ou ignore pour publier sans image)...",
-      ephemeral: true,
-    });
+    await interaction.deferReply({ ephemeral: true });
 
-    let imageUrl = null;
-    try {
-      const collected = await interaction.channel.awaitMessages({
-        filter: (m) => m.author.id === interaction.user.id && m.attachments.size > 0,
-        max: 1,
-        time: 60_000,
-        errors: ['time'],
-      });
-      const msg = collected.first();
-      imageUrl = msg.attachments.first().url;
-      await msg.delete().catch(() => {});
-    } catch {
-      // Personne n'a envoyé d'image dans le délai : on continue sans.
-    }
+    const emoji = findEmoji(emojiName);
+    const titlePrefix = emoji ? `<:${emoji.name}:${emoji.id}>` : '📢';
 
     try {
       const webhook = await getOrCreateWebhook(channel);
@@ -157,8 +152,8 @@ module.exports = {
         embed.setURL(lien);
         embed.addFields({ name: '<:lien:1562933815700226159> Lien', value: `[Clique ici](${lien})` });
       }
-      if (imageUrl) {
-        embed.setImage(imageUrl);
+      if (image) {
+        embed.setImage(image);
       }
 
       const annonceRoleId = config.notifRoles.annonceRoleId;
@@ -172,10 +167,10 @@ module.exports = {
         allowedMentions: annonceRoleId ? { roles: [annonceRoleId] } : { parse: ['everyone'] },
       });
 
-      await interaction.editReply(`✅ Annonce envoyée dans ${channel}${imageUrl ? ' (avec image)' : ''}.`);
+      await interaction.editReply(`✅ Annonce envoyée dans ${channel}.`);
     } catch (err) {
       console.error('Erreur /annonce :', err);
-      await interaction.editReply("❌ Impossible d'envoyer l'annonce (permissions webhook manquantes ?).");
+      await interaction.editReply("❌ Impossible d'envoyer l'annonce (webhook/permissions).");
     }
   },
 };
