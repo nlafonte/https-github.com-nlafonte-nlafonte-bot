@@ -6,15 +6,20 @@ const {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
+  StringSelectMenuBuilder,
 } = require('discord.js');
 const config = require('../../config');
 const { getOrCreateWebhook } = require('../../utils/liveWebhook');
 
 const MODAL_ID = 'annonce_modal';
+const EMOJI_SELECT_ID = 'annonce_emoji_select';
 
-// Discord ne permet ni sélecteur d'emoji ni upload de fichier dans un formulaire (modal) :
-// seuls des champs texte y sont autorisés. On demande donc le nom de l'emoji (ex: "flamme")
-// et un lien d'image en texte, directement dans le formulaire.
+// Discord ne permet ni bouton emoji-picker ni upload de fichier dans un formulaire (modal) :
+// un modal n'accepte que des champs texte, sans aucune autocomplétion ni aperçu visuel
+// (vérifié : taper ":flamme:" dans un champ de modal reste du texte brut, contrairement à la
+// vraie zone de message). Pour laisser l'utilisateur VOIR l'emoji avant de choisir, on passe
+// donc par un menu déroulant (qui affiche l'icône de chaque emoji) juste avant d'ouvrir le
+// formulaire. L'image, elle, se fait via un lien URL dans le formulaire.
 const EMOJIS = [
   { name: 'annonces', id: '1562920124795846792' },
   { name: 'actualites', id: '1562933822369173595' },
@@ -43,9 +48,7 @@ const EMOJIS = [
 ];
 
 function findEmoji(name) {
-  if (!name) return null;
-  const clean = name.trim().toLowerCase().replace(/:/g, '');
-  return EMOJIS.find((e) => e.name === clean) || null;
+  return EMOJIS.find((e) => e.name === name) || null;
 }
 
 function isValidUrl(value) {
@@ -57,8 +60,50 @@ function isValidUrl(value) {
   }
 }
 
+function buildModal(emojiChoice) {
+  const modal = new ModalBuilder().setCustomId(`${MODAL_ID}:${emojiChoice}`).setTitle('Nouvelle annonce');
+
+  const titreInput = new TextInputBuilder()
+    .setCustomId('titre')
+    .setLabel('Titre')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100);
+
+  const messageInput = new TextInputBuilder()
+    .setCustomId('message')
+    .setLabel('Message')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setMaxLength(2000);
+
+  const lienInput = new TextInputBuilder()
+    .setCustomId('lien')
+    .setLabel('Lien (optionnel)')
+    .setPlaceholder('https://...')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false);
+
+  const imageInput = new TextInputBuilder()
+    .setCustomId('image')
+    .setLabel("Image - lien URL (optionnel)")
+    .setPlaceholder('https://... (termine par .png, .jpg, .gif...)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(titreInput),
+    new ActionRowBuilder().addComponents(messageInput),
+    new ActionRowBuilder().addComponents(lienInput),
+    new ActionRowBuilder().addComponents(imageInput),
+  );
+
+  return modal;
+}
+
 module.exports = {
   MODAL_ID,
+  EMOJI_SELECT_ID,
 
   data: new SlashCommandBuilder()
     .setName('annonce')
@@ -66,59 +111,34 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(interaction) {
-    const modal = new ModalBuilder().setCustomId(MODAL_ID).setTitle('Nouvelle annonce');
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(EMOJI_SELECT_ID)
+      .setPlaceholder("Choisis l'emoji de ton annonce...")
+      .addOptions([
+        { label: 'Sans emoji', value: 'none', emoji: '🚫' },
+        ...EMOJIS.map((e) => ({ label: e.name, value: e.name, emoji: { id: e.id, name: e.name } })),
+      ]);
 
-    const titreInput = new TextInputBuilder()
-      .setCustomId('titre')
-      .setLabel('Titre')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setMaxLength(100);
+    await interaction.reply({
+      content: "Choisis l'emoji qui précédera le titre de ton annonce :",
+      components: [new ActionRowBuilder().addComponents(select)],
+      ephemeral: true,
+    });
+  },
 
-    const messageInput = new TextInputBuilder()
-      .setCustomId('message')
-      .setLabel('Message')
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true)
-      .setMaxLength(2000);
-
-    const emojiInput = new TextInputBuilder()
-      .setCustomId('emoji')
-      .setLabel('Emoji (optionnel)')
-      .setPlaceholder('flamme, annonces, etoile, cadeau, video...')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(false)
-      .setMaxLength(30);
-
-    const lienInput = new TextInputBuilder()
-      .setCustomId('lien')
-      .setLabel('Lien (optionnel)')
-      .setPlaceholder('https://...')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(false);
-
-    const imageInput = new TextInputBuilder()
-      .setCustomId('image')
-      .setLabel("Image - lien URL (optionnel)")
-      .setPlaceholder('https://... (termine par .png, .jpg, .gif...)')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(false);
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(titreInput),
-      new ActionRowBuilder().addComponents(messageInput),
-      new ActionRowBuilder().addComponents(emojiInput),
-      new ActionRowBuilder().addComponents(lienInput),
-      new ActionRowBuilder().addComponents(imageInput),
-    );
-
-    await interaction.showModal(modal);
+  async handleEmojiSelect(interaction) {
+    const choice = interaction.values[0];
+    await interaction.showModal(buildModal(choice));
+    await interaction.deleteReply().catch(() => {});
   },
 
   async handleModalSubmit(interaction) {
+    const [, emojiChoice] = interaction.customId.split(':');
+    const emoji = emojiChoice && emojiChoice !== 'none' ? findEmoji(emojiChoice) : null;
+    const titlePrefix = emoji ? `<:${emoji.name}:${emoji.id}>` : '📢';
+
     const titre = interaction.fields.getTextInputValue('titre');
     const message = interaction.fields.getTextInputValue('message');
-    const emojiName = interaction.fields.getTextInputValue('emoji');
     const lien = interaction.fields.getTextInputValue('lien');
     const image = interaction.fields.getTextInputValue('image');
 
@@ -136,9 +156,6 @@ module.exports = {
     }
 
     await interaction.deferReply({ ephemeral: true });
-
-    const emoji = findEmoji(emojiName);
-    const titlePrefix = emoji ? `<:${emoji.name}:${emoji.id}>` : '📢';
 
     try {
       const webhook = await getOrCreateWebhook(channel);
