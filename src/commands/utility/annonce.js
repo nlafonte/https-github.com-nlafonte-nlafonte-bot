@@ -77,12 +77,15 @@ module.exports = {
         embed.addFields({ name: '<:lien:1562933815700226159> Lien', value: `[Clique ici](${lien})` });
       }
 
+      const annonceRoleId = config.notifRoles.annonceRoleId;
+      const ping = annonceRoleId ? `<@&${annonceRoleId}>` : '@everyone';
+
       await webhook.send({
         username: `${interaction.user.username} annonce`,
         avatarURL: interaction.user.displayAvatarURL(),
-        content: '<:annonces:1562920124795846792> @everyone',
+        content: `<:annonces:1562920124795846792> ${ping}`,
         embeds: [embed],
-        allowedMentions: { parse: ['everyone'] },
+        allowedMentions: annonceRoleId ? { roles: [annonceRoleId] } : { parse: ['everyone'] },
       });
 
       await interaction.editReply(`✅ Annonce envoyée dans ${channel}.`);

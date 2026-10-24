@@ -17,6 +17,13 @@ module.exports = {
 
   studioHubChannelId: process.env.STUDIO_HUB_CHANNEL_ID,
   liveChannelId: process.env.LIVE_CHANNEL_ID,
+  rolesChannelId: process.env.ROLES_CHANNEL_ID,
+
+  notifRoles: {
+    twitchRoleId: process.env.NOTIF_TWITCH_ROLE_ID,
+    youtubeRoleId: process.env.NOTIF_YOUTUBE_ROLE_ID,
+    annonceRoleId: process.env.NOTIF_ANNONCE_ROLE_ID,
+  },
 
   twitch: {
     clientId: process.env.TWITCH_CLIENT_ID,

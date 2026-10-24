@@ -58,15 +58,17 @@ async function announce(client, stream) {
 
   const announceEmoji = '<:annonces:1562920124795846792>';
   const flameEmoji = '<:flamme:1562920340986798160>';
+  const twitchRoleId = config.notifRoles.twitchRoleId;
+  const ping = twitchRoleId ? `<@&${twitchRoleId}>` : '@everyone';
 
   try {
     const webhook = await getOrCreateWebhook(channel);
     await webhook.send({
       username: `${stream.user_name} est en live sur Twitch !`,
       avatarURL: client.user.displayAvatarURL(),
-      content: `${announceEmoji} @everyone ${flameEmoji} **${stream.user_name}** vient de passer en live sur Twitch !`,
+      content: `${announceEmoji} ${ping} ${flameEmoji} **${stream.user_name}** vient de passer en live sur Twitch !`,
       embeds: [embed],
-      allowedMentions: { parse: ['everyone'] },
+      allowedMentions: twitchRoleId ? { roles: [twitchRoleId] } : { parse: ['everyone'] },
     });
     console.log('[twitch] annonce envoyée avec succès dans', channel.name);
   } catch (err) {

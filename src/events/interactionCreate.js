@@ -1,6 +1,7 @@
 const { Events } = require('discord.js');
 const tickets = require('../utils/tickets');
 const annonce = require('../commands/utility/annonce');
+const notifRoles = require('../utils/notifRoles');
 
 module.exports = {
   name: Events.InteractionCreate,
@@ -33,9 +34,11 @@ module.exports = {
           await tickets.confirmClose(interaction);
         } else if (interaction.customId === 'ticket_close_cancel') {
           await tickets.cancelClose(interaction);
+        } else if (interaction.customId in notifRoles.NOTIFS) {
+          await notifRoles.toggleRole(interaction);
         }
       } catch (error) {
-        console.error('Erreur bouton ticket :', error);
+        console.error('Erreur bouton :', error);
       }
       return;
     }
