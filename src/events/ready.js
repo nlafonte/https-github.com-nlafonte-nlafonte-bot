@@ -6,7 +6,9 @@ module.exports = {
   once: true,
   execute(client) {
     console.log(`✅ Connecté en tant que ${client.user.tag}`);
-    client.user.setActivity('nlafonte', { type: ActivityType.Watching });
+    // Type "Streaming" (et uniquement celui-ci) permet d'afficher un lien cliquable,
+    // mais Discord n'accepte que twitch.tv ou youtube.com comme url.
+    client.user.setActivity('nlafonte', { type: ActivityType.Streaming, url: 'https://twitch.tv/nlafonte' });
     startTwitchWatcher(client);
   },
 };
