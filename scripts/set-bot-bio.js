@@ -5,8 +5,8 @@ const TOKEN = process.env.DISCORD_TOKEN;
 const API = 'https://discord.com/api/v10';
 
 const description =
-  '🤖 Bot officiel du serveur **nlafonte** — modération, tickets, musique, notifications et bien plus.\n\n' +
-  '🔴 Suis mes lives : https://twitch.tv/nlafonte';
+  'Bot officiel du serveur **nlafonte** — modération, tickets, musique, notifications et bien plus.\n\n' +
+  'Suis mes lives : https://twitch.tv/nlafonte';
 
 (async () => {
   const res = await fetch(`${API}/applications/@me`, {
